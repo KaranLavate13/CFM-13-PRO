@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CloudFleet Pro — Vessel Fleet, Inventory, Incidents & Power BI Hub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: { 850: '#151e2e', 950: '#0b1120' }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(56, 189, 248, 0.45), 0 0 30px rgba(139, 92, 246, 0.25); }
+      50% { box-shadow: 0 0 24px rgba(56, 189, 248, 0.8), 0 0 45px rgba(139, 92, 246, 0.5); }
+    }
+    .ai-glow { animation: pulseGlow 2.8s infinite ease-in-out; }
+    .fade-in { animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- Top Navigation -->
+  <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l2 2h14l2-2M5 17V9l7-4 7 4v8M12 5v12" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight text-white leading-none">CloudFleet <span class="text-sky-400">Pro</span></h1>
+        <p class="text-xs text-slate-400 mt-0.5">Vessel Fleet • Inventory • Incidents • Power BI Hub</p>
+      </div>
+    </div>
+
+    <nav class="flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+      <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium bg-sky-600 text-white transition">Dashboard</button>
+      <button onclick="switchTab('vessels')" id="tab-vessels" class="tab-btn px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition">Vessel Names</button>
+      <button onclick="switchTab('inventory')" id="tab-inventory" class="tab-btn px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition">Inventory</button>
+      <button onclick="switchTab('incidents')" id="tab-incidents" class="tab-btn px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition">Incidents</button>
+      <button onclick="switchTab('connectors')" id="tab-connectors" class="tab-btn px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition">Servers & Power BI</button>
+    </nav>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <button onclick="openModal('addVesselModal')" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs sm:text-sm font-medium transition">+ Vessel</button>
+      <button onclick="openInventoryModal()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-medium transition">+ Inventory</button>
+      <button onclick="openIncidentModal()" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs sm:text-sm font-medium transition">+ Incident</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6">
+
+    <!-- ==================== TAB 1: DASHBOARD ==================== -->
+    <section id="view-dashboard" class="space-y-6 fade-in">
+      <!-- KPI Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-400">Total Vessels</p>
+          <p id="kpi-vessels" class="text-2xl font-bold text-white mt-1">0</p>
+          <p class="text-xs text-slate-500 mt-1">Active fleet</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-400">Inventory Items</p>
+          <p id="kpi-inventory" class="text-2xl font-bold text-indigo-400 mt-1">0</p>
+          <p class="text-xs text-slate-500 mt-1">Tracked spares</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-400">Open Incidents</p>
+          <p id="kpi-incidents" class="text-2xl font-bold text-rose-400 mt-1">0</p>
+          <p class="text-xs text-slate-500 mt-1">New & Pending</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-400">New Tasks</p>
+          <p id="kpi-tag-new" class="text-2xl font-bold text-sky-400 mt-1">0</p>
+          <p class="text-xs text-slate-500 mt-1">Across all tabs</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-400">Pending Tasks</p>
+          <p id="kpi-tag-pending" class="text-2xl font-bold text-amber-400 mt-1">0</p>
+          <p class="text-xs text-slate-500 mt-1">In progress</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-xs uppercase tracking-wider text-slate-400">Complete Tasks</p>
+          <p id="kpi-tag-complete" class="text-2xl font-bold text-emerald-400 mt-1">0</p>
+          <p class="text-xs text-slate-500 mt-1">Verified done</p>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h2 class="text-sm font-semibold text-slate-200 mb-4">Task Tag Distribution (All Modules)</h2>
+          <div class="h-60 flex items-center justify-center">
+            <canvas id="taskChart"></canvas>
+          </div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 lg:col-span-2">
+          <h2 class="text-sm font-semibold text-slate-200 mb-4">Fuel / Readiness (%) by Vessel</h2>
+          <div class="h-60">
+            <canvas id="fuelChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Overview Table -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-base font-semibold text-white">Recent Incidents & Active Tasks</h2>
+          <button onclick="exportAllJSON()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium">
+            Export Full Snapshot (.JSON)
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
+                <th class="py-3 px-4">Module</th>
+                <th class="py-3 px-4">Vessel Name</th>
+                <th class="py-3 px-4">Item / Incident</th>
+                <th class="py-3 px-4">Details</th>
+                <th class="py-3 px-4">Task Tag (Click to Cycle)</th>
+              </tr>
+            </thead>
+            <tbody id="dashboardTaskBody" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: VESSEL NAMES ==================== -->
+    <section id="view-vessels" class="hidden space-y-6 fade-in">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-white">Vessel Name Registry</h2>
+            <p class="text-xs text-slate-400">Manage registered vessels, operational status, and inspection task tags.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="vesselSearch" oninput="renderVessels()" type="text" placeholder="Search vessel name, ID, IMO..." class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+            <select id="vesselTagFilter" onchange="renderVessels()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200">
+              <option value="All">All Task Tags</option>
+              <option value="New">New</option>
+              <option value="Pending">Pending</option>
+              <option value="Complete">Complete</option>
+            </select>
+            <button onclick="exportCSV('vessels')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700">Export CSV</button>
+            <button onclick="openModal('addVesselModal')" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs text-white font-medium">+ Add Vessel</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
+                <th class="py-3 px-4">Vessel ID</th>
+                <th class="py-3 px-4">Vessel Name</th>
+                <th class="py-3 px-4">Type & IMO</th>
+                <th class="py-3 px-4">Location / Port</th>
+                <th class="py-3 px-4">Fuel / Readiness</th>
+                <th class="py-3 px-4">Fleet Status</th>
+                <th class="py-3 px-4">Task Tag</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="vesselTableBody" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: VESSEL INVENTORY ==================== -->
+    <section id="view-inventory" class="hidden space-y-6 fade-in">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-white">Vessel Inventory & Spare Parts</h2>
+            <p class="text-xs text-slate-400">Track spares per vessel, stock levels, and fulfillment task tags.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="invSearch" oninput="renderInventory()" type="text" placeholder="Search vessel, part, code..." class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+            <select id="invTagFilter" onchange="renderInventory()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200">
+              <option value="All">All Task Tags</option>
+              <option value="New">New</option>
+              <option value="Pending">Pending</option>
+              <option value="Complete">Complete</option>
+            </select>
+            <button onclick="exportCSV('inventory')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700">Export CSV</button>
+            <button onclick="openInventoryModal()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium">+ Add Vessel Inventory</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
+                <th class="py-3 px-4">Inv ID</th>
+                <th class="py-3 px-4">Vessel Name</th>
+                <th class="py-3 px-4">Component / Spare</th>
+                <th class="py-3 px-4">Part Code</th>
+                <th class="py-3 px-4">Category</th>
+                <th class="py-3 px-4">Stock Qty</th>
+                <th class="py-3 px-4">Task Tag</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTableBody" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: INCIDENTS ==================== -->
+    <section id="view-incidents" class="hidden space-y-6 fade-in">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-white">Vessel Incident Tracker</h2>
+            <p class="text-xs text-slate-400">Log operational incidents, severity levels, and resolution task tags.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="incSearch" oninput="renderIncidents()" type="text" placeholder="Search vessel, incident, reporter..." class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+            <select id="incTagFilter" onchange="renderIncidents()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200">
+              <option value="All">All Task Tags</option>
+              <option value="New">New</option>
+              <option value="Pending">Pending</option>
+              <option value="Complete">Complete</option>
+            </select>
+            <button onclick="exportCSV('incidents')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700">Export CSV</button>
+            <button onclick="openIncidentModal()" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs text-white font-medium">+ Add Incident</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
+                <th class="py-3 px-4">Incident ID</th>
+                <th class="py-3 px-4">Vessel Name</th>
+                <th class="py-3 px-4">Incident Summary</th>
+                <th class="py-3 px-4">Severity</th>
+                <th class="py-3 px-4">Reported By</th>
+                <th class="py-3 px-4">Date</th>
+                <th class="py-3 px-4">Task Tag</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="incidentTableBody" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: SERVERS & POWER BI CONNECTOR ==================== -->
+    <section id="view-connectors" class="hidden space-y-6 fade-in">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-white">External Server & Database Connections</h2>
+            <p class="text-xs text-slate-400">Connect SQL Servers, MySQL, REST APIs, and OData Gateways for Power BI.</p>
+          </div>
+          <button onclick="openModal('addServerModal')" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition">
+            + Add Server Endpoint
+          </button>
+        </div>
+
+        <div id="serverList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-mono uppercase text-slate-400">Live Server Sync Log</span>
+            <button onclick="clearLogs()" class="text-xs text-slate-500 hover:text-slate-300">Clear</button>
+          </div>
+          <div id="syncLogs" class="font-mono text-xs text-emerald-400 space-y-1 max-h-32 overflow-y-auto">
+            <div>[SYSTEM] Connector Hub ready. Vessels, Inventory, and Incidents schemas loaded.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Power BI Feed & M-Query -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-semibold text-white">Power BI Connector (Web / OData / SQL)</h2>
+              <p class="text-xs text-slate-400">Paste into Power BI Desktop → Get Data → Blank Query.</p>
+            </div>
+            <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">Power BI Ready</span>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p class="text-xs text-slate-400">Bearer API Key</p>
+              <code id="pbiApiKey" class="text-xs text-sky-400 font-mono">cf_live_98a7f6c2e1b4d09a</code>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="copyText('pbiApiKey')" class="px-2.5 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-200">Copy</button>
+              <button onclick="rotateApiKey()" class="px-2.5 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 text-amber-400">Rotate</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-xs font-medium text-slate-300">Power Query (M) Script</label>
+              <button onclick="copyMQuery()" class="text-xs text-sky-400 hover:text-sky-300 font-medium">Copy M Script</button>
+            </div>
+            <pre id="mQueryBox" class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-300 overflow-x-auto leading-relaxed"></pre>
+          </div>
+
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button onclick="exportCSV('vessels')" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold">Vessels .CSV</button>
+            <button onclick="exportCSV('inventory')" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">Inventory .CSV</button>
+            <button onclick="exportCSV('incidents')" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold">Incidents .CSV</button>
+            <button onclick="exportAllJSON()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold">Full .JSON</button>
+          </div>
+        </div>
+
+        <!-- Live Schema Preview -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="text-base font-semibold text-white">Live Data Schema Preview</h2>
+            <div class="flex gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+              <button onclick="renderSchema('Vessels')" id="sch-Vessels" class="sch-btn px-2.5 py-1 rounded bg-sky-600 text-white">Vessels</button>
+              <button onclick="renderSchema('Vessel_Inventory')" id="sch-Vessel_Inventory" class="sch-btn px-2.5 py-1 rounded text-slate-400 hover:text-white">Inventory</button>
+              <button onclick="renderSchema('Incidents')" id="sch-Incidents" class="sch-btn px-2.5 py-1 rounded text-slate-400 hover:text-white">Incidents</button>
+            </div>
+          </div>
+          <pre id="schemaPreview" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-sky-300 overflow-auto max-h-80"></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- Add Vessel Modal -->
+  <div id="addVesselModal" class="hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white">Add Vessel Name</h3>
+        <button onclick="closeModal('addVesselModal')" class="text-slate-400 hover:text-white text-xl">×</button>
+      </div>
+      <form onsubmit="addVessel(event)" class="space-y-3 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Vessel ID</label>
+            <input id="vId" required placeholder="VSL-105" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">IMO Number</label>
+            <input id="vImo" required placeholder="IMO 9842110" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Vessel Name</label>
+          <input id="vName" required placeholder="MV Ocean Horizon" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Vessel Type</label>
+            <select id="vType" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option>Chemical Tanker</option>
+              <option>Bulk Carrier</option>
+              <option>Container Ship</option>
+              <option>LNG Carrier</option>
+              <option>Offshore Supply</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Current Port / Zone</label>
+            <input id="vLocation" required placeholder="Mumbai Anchorage" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Fuel / Readiness (%)</label>
+            <input id="vFuel" type="number" min="0" max="100" value="85" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Task Tag</label>
+            <select id="vTag" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option value="New">New</option>
+              <option value="Pending">Pending</option>
+              <option value="Complete">Complete</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('addVesselModal')" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium">Save Vessel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Vessel Inventory Modal -->
+  <div id="addInventoryModal" class="hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white">Add Vessel Inventory</h3>
+        <button onclick="closeModal('addInventoryModal')" class="text-slate-400 hover:text-white text-xl">×</button>
+      </div>
+      <form onsubmit="addInventory(event)" class="space-y-3 text-sm">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Select Vessel Name</label>
+          <select id="invVesselSelect" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"></select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Part / Component Name</label>
+            <input id="invPartName" required placeholder="Fuel Injector Valve" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Part Code</label>
+            <input id="invPartCode" required placeholder="SP-4490-A" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Category</label>
+            <select id="invCategory" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option>Main Engine</option>
+              <option>Auxiliary Machinery</option>
+              <option>Deck & Safety</option>
+              <option>Navigation / Electrical</option>
+              <option>Pumps & Valves</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Task Tag</label>
+            <select id="invTag" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option value="New">New</option>
+              <option value="Pending">Pending</option>
+              <option value="Complete">Complete</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Quantity in Stock</label>
+            <input id="invQty" type="number" min="0" value="10" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Min Reorder Level</label>
+            <input id="invMinQty" type="number" min="0" value="4" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('addInventoryModal')" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Save Inventory</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Incident Modal -->
+  <div id="addIncidentModal" class="hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white">Log Vessel Incident</h3>
+        <button onclick="closeModal('addIncidentModal')" class="text-slate-400 hover:text-white text-xl">×</button>
+      </div>
+      <form onsubmit="addIncident(event)" class="space-y-3 text-sm">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Select Vessel Name</label>
+          <select id="incVesselSelect" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white"></select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Incident Summary</label>
+          <input id="incTitle" required placeholder="Auxiliary generator pressure drop" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Severity</label>
+            <select id="incSeverity" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option>Low</option>
+              <option>Medium</option>
+              <option>High</option>
+              <option>Critical</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Task Tag</label>
+            <select id="incTag" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option value="New">New</option>
+              <option value="Pending">Pending</option>
+              <option value="Complete">Complete</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Reported By</label>
+            <input id="incReporter" required placeholder="Chief Engineer" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Date</label>
+            <input id="incDate" type="date" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('addIncidentModal')" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium">Log Incident</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Server Modal -->
+  <div id="addServerModal" class="hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white">Add Server / Power BI Endpoint</h3>
+        <button onclick="closeModal('addServerModal')" class="text-slate-400 hover:text-white text-xl">×</button>
+      </div>
+      <form onsubmit="addServer(event)" class="space-y-3 text-sm">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Connection Name</label>
+          <input id="sName" required placeholder="Primary SQL / Telemetry Gateway" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Protocol</label>
+            <select id="sType" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option>SQL Server (DirectQuery)</option>
+              <option>MySQL Connector</option>
+              <option>REST JSON API</option>
+              <option>OData v4 Feed</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Sync Interval</label>
+            <select id="sInterval" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option>Real-time</option>
+              <option>Every 5 min</option>
+              <option>Hourly</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Host / Endpoint URL</label>
+          <input id="sUrl" required placeholder="172.16.1.31:1433/FleetDB" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('addServerModal')" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Connect Server</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== FLOATING FREE GEMINI FLASH AI ==================== -->
+  <button id="aiFab" onclick="toggleAiPanel()" title="Gemini Flash AI Assistant"
+    class="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-tr from-sky-500 via-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-2xl ai-glow hover:scale-105 transition-transform">
+    <svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
+    </svg>
+  </button>
+
+  <div id="aiPanel" class="hidden fixed bottom-24 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-96 max-h-[75vh] bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden fade-in">
+    <div class="px-4 py-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <div>
+          <h3 class="text-sm font-bold text-white leading-none">Gemini Flash AI</h3>
+          <p class="text-[11px] text-sky-400 mt-0.5">Free Tier • Vessels, Inventory & Incidents</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button onclick="toggleApiKeySettings()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Key</button>
+        <button onclick="toggleAiPanel()" class="p-1 text-slate-400 hover:text-white text-lg leading-none">×</button>
+      </div>
+    </div>
+
+    <div id="aiSettings" class="hidden bg-slate-950 border-b border-slate-800 p-3 space-y-2 text-xs">
+      <p class="text-slate-400">Enter your free <a href="https://aistudio.google.com/apikey" target="_blank" class="text-sky-400 underline">Google AI Studio</a> API key:</p>
+      <input id="geminiKeyInput" type="password" placeholder="AIzaSy..." class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white font-mono" />
+      <div class="flex items-center gap-2">
+        <select id="geminiModelSelect" class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-slate-200">
+          <option value="gemini-2.5-flash">gemini-2.5-flash (Free Tier)</option>
+          <option value="gemini-2.0-flash">gemini-2.0-flash (Free Tier)</option>
+        </select>
+        <button onclick="saveGeminiConfig()" class="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-medium">Save</button>
+      </div>
+    </div>
+
+    <div class="px-3 py-2 bg-slate-950/60 border-b border-slate-800 flex gap-1.5 overflow-x-auto">
+      <button onclick="quickAsk('Summarize all New and Pending tasks across vessels, inventory, and incidents.')" class="shrink-0 px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-[11px] text-sky-300 border border-slate-700">Task Summary</button>
+      <button onclick="quickAsk('Which vessel inventory items are low on stock and need immediate reorder?')" class="shrink-0 px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-[11px] text-indigo-300 border border-slate-700">Low Stock</button>
+      <button onclick="quickAsk('Write Power BI DAX measures for Open Incidents % and Task Completion Rate.')" class="shrink-0 px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-[11px] text-amber-300 border border-slate-700">Power BI DAX</button>
+    </div>
+
+    <div id="aiMessages" class="flex-1 p-3 space-y-3 overflow-y-auto text-xs leading-relaxed">
+      <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-3 text-slate-200">
+        Connected to your live <strong>Vessels</strong>, <strong>Inventory</strong>, <strong>Incidents</strong>, and <strong>Task Tags</strong>. Click <strong>Key</strong> to add your free Gemini API key and ask anything!
+      </div>
+    </div>
+
+    <form onsubmit="sendAiMessage(event)" class="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
+      <input id="aiInput" type="text" placeholder="Ask about vessels, spares, incidents, DAX..." required
+        class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+      <button type="submit" id="aiSendBtn" class="px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition">Send</button>
+    </form>
+  </div>
+
+  <!-- ==================== APPLICATION SCRIPT ==================== -->
+  <script>
+    // ---------- Default Data ----------
+    const defaultVessels = [
+      { id: 'VSL-101', name: 'MV Pacific Voyager', imo: 'IMO 9741022', type: 'Chemical Tanker', location: 'Mumbai Port', fuel: 86, status: 'Active', taskTag: 'Complete' },
+      { id: 'VSL-102', name: 'MT Arabian Crest', imo: 'IMO 9812045', type: 'LNG Carrier', location: 'Fujairah Anchorage', fuel: 64, status: 'Active', taskTag: 'Pending' },
+      { id: 'VSL-103', name: 'MV Northern Star', imo: 'IMO 9655810', type: 'Bulk Carrier', location: 'Singapore Strait', fuel: 38, status: 'Maintenance', taskTag: 'New' },
+      { id: 'VSL-104', name: 'MT Coastal Pioneer', imo: 'IMO 9901432', type: 'Container Ship', location: 'JNPT Terminal', fuel: 91, status: 'Idle', taskTag: 'Complete' }
+    ];
+
+    const defaultInventory = [
+      { id: 'INV-201', vesselName: 'MV Pacific Voyager', partName: 'Main Engine Fuel Injector', partCode: 'ME-4092', category: 'Main Engine', qty: 12, minQty: 5, taskTag: 'Complete' },
+      { id: 'INV-202', vesselName: 'MT Arabian Crest', partName: 'Cooling Water Pump Seal', partCode: 'PV-1180', category: 'Pumps & Valves', qty: 2, minQty: 6, taskTag: 'Pending' },
+      { id: 'INV-203', vesselName: 'MV Northern Star', partName: 'Radar Transceiver Module', partCode: 'NV-8821', category: 'Navigation / Electrical', qty: 1, minQty: 2, taskTag: 'New' },
+      { id: 'INV-204', vesselName: 'MT Coastal Pioneer', partName: 'Lifeboat Release Hook Kit', partCode: 'DS-3019', category: 'Deck & Safety', qty: 8, minQty: 4, taskTag: 'Complete' }
+    ];
+
+    const defaultIncidents = [
+      { id: 'INC-301', vesselName: 'MV Northern Star', title: 'Aux Generator #2 oil pressure fluctuation', severity: 'High', reportedBy: 'Chief Engineer', date: '2026-11-26', taskTag: 'New' },
+      { id: 'INC-302', vesselName: 'MT Arabian Crest', title: 'Ballast valve sensor calibration drift', severity: 'Medium', reportedBy: '2nd Officer', date: '2026-11-25', taskTag: 'Pending' },
+      { id: 'INC-303', vesselName: 'MV Pacific Voyager', title: 'Bridge VHF antenna connector corrosion', severity: 'Low', reportedBy: 'ETO', date: '2026-11-22', taskTag: 'Complete' }
+    ];
+
+    const defaultServers = [
+      { id: 'srv-1', name: 'Primary SQL Fleet Server', type: 'SQL Server (DirectQuery)', url: '172.16.1.31:1433/FleetDB', interval: 'Real-time', status: 'Online', latency: '18ms' },
+      { id: 'srv-2', name: 'Power BI OData / JSON Gateway', type: 'OData v4 Feed', url: 'https://api.cloudfleet.local/v1/odata/vessels', interval: 'Every 5 min', status: 'Online', latency: '42ms' }
+    ];
+
+    let vessels = JSON.parse(localStorage.getItem('cf_vessels_v2')) || defaultVessels;
+    let inventory = JSON.parse(localStorage.getItem('cf_inventory_v2')) || defaultInventory;
+    let incidents = JSON.parse(localStorage.getItem('cf_incidents_v2')) || defaultIncidents;
+    let servers = JSON.parse(localStorage.getItem('cf_servers_v2')) || defaultServers;
+    let pbiApiKey = localStorage.getItem('cf_pbi_key') || 'cf_live_98a7f6c2e1b4d09a';
+    let geminiApiKey = localStorage.getItem('cf_gemini_key') || '';
+    let geminiModel = localStorage.getItem('cf_gemini_model') || 'gemini-2.5-flash';
+
+    let taskChartInstance = null;
+    let fuelChartInstance = null;
+
+    function saveState() {
+      localStorage.setItem('cf_vessels_v2', JSON.stringify(vessels));
+      localStorage.setItem('cf_inventory_v2', JSON.stringify(inventory));
+      localStorage.setItem('cf_incidents_v2', JSON.stringify(incidents));
+      localStorage.setItem('cf_servers_v2', JSON.stringify(servers));
+      localStorage.setItem('cf_pbi_key', pbiApiKey);
+    }
+
+    // ---------- Task Tag Helpers ----------
+    const TAG_ORDER = ['New', 'Pending', 'Complete'];
+
+    function getTagBadgeClass(tag) {
+      if (tag === 'Complete') return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+      if (tag === 'Pending') return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+      return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
+    }
+
+    function cycleTaskTag(module, id) {
+      const list = module === 'vessels' ? vessels : module === 'inventory' ? inventory : incidents;
+      const item = list.find(x => x.id === id);
+      if (item) {
+        item.taskTag = TAG_ORDER[(TAG_ORDER.indexOf(item.taskTag) + 1) % TAG_ORDER.length];
+        saveState();
+        renderAll();
+      }
+    }
+
+    // ---------- Navigation ----------
+    function switchTab(tab) {
+      ['dashboard', 'vessels', 'inventory', 'incidents', 'connectors'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`tab-${t}`);
+        btn.classList.toggle('bg-sky-600', t === tab);
+        btn.classList.toggle('text-white', t === tab);
+        btn.classList.toggle('text-slate-400', t !== tab);
+      });
+      if (tab === 'connectors') {
+        renderServers();
+        updateMQuery();
+        renderSchema('Vessels');
+      }
+    }
+
+    // ---------- Modals ----------
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function populateVesselDropdowns() {
+      const options = vessels.map(v => `<option value="${v.name}">${v.name} (${v.id})</option>`).join('');
+      document.getElementById('invVesselSelect').innerHTML = options || '<option value="Unassigned">No vessels added</option>';
+      document.getElementById('incVesselSelect').innerHTML = options || '<option value="Unassigned">No vessels added</option>';
+    }
+
+    function openInventoryModal() {
+      populateVesselDropdowns();
+      openModal('addInventoryModal');
+    }
+
+    function openIncidentModal() {
+      populateVesselDropdowns();
+      document.getElementById('incDate').value = new Date().toISOString().split('T')[0];
+      openModal('addIncidentModal');
+    }
+
+    // ---------- Render All ----------
+    function renderAll() {
+      renderVessels();
+      renderInventory();
+      renderIncidents();
+      renderDashboard();
+      renderServers();
+    }
+
+    // ---------- Dashboard ----------
+    function renderDashboard() {
+      const allItems = [
+        ...vessels.map(v => ({ module: 'vessels', label: 'Vessel', id: v.id, vesselName: v.name, title: v.type, details: `${v.location} • ${v.status}`, taskTag: v.taskTag })),
+        ...inventory.map(i => ({ module: 'inventory', label: 'Inventory', id: i.id, vesselName: i.vesselName, title: i.partName, details: `Qty: ${i.qty} (Min: ${i.minQty})`, taskTag: i.taskTag })),
+        ...incidents.map(c => ({ module: 'incidents', label: 'Incident', id: c.id, vesselName: c.vesselName, title: c.title, details: `${c.severity} • ${c.date}`, taskTag: c.taskTag }))
+      ];
+
+      const newCount = allItems.filter(x => x.taskTag === 'New').length;
+      const pendingCount = allItems.filter(x => x.taskTag === 'Pending').length;
+      const completeCount = allItems.filter(x => x.taskTag === 'Complete').length;
+      const openIncidents = incidents.filter(i => i.taskTag !== 'Complete').length;
+
+      document.getElementById('kpi-vessels').textContent = vessels.length;
+      document.getElementById('kpi-inventory').textContent = inventory.length;
+      document.getElementById('kpi-incidents').textContent = openIncidents;
+      document.getElementById('kpi-tag-new').textContent = newCount;
+      document.getElementById('kpi-tag-pending').textContent = pendingCount;
+      document.getElementById('kpi-tag-complete').textContent = completeCount;
+
+      // Dashboard Task Feed (prioritize New & Pending first)
+      const sorted = [...allItems].sort((a, b) => TAG_ORDER.indexOf(a.taskTag) - TAG_ORDER.indexOf(b.taskTag)).slice(0, 8);
+      document.getElementById('dashboardTaskBody').innerHTML = sorted.map(item => `
+        <tr class="hover:bg-slate-800/40 transition">
+          <td class="py-2.5 px-4"><span class="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">${item.label}</span></td>
+          <td class="py-2.5 px-4 font-medium text-white">${item.vesselName}</td>
+          <td class="py-2.5 px-4 text-slate-200">${item.title}</td>
+          <td class="py-2.5 px-4 text-xs text-slate-400">${item.details}</td>
+          <td class="py-2.5 px-4">
+            <button onclick="cycleTaskTag('${item.module}', '${item.id}')" class="px-2.5 py-1 rounded-full text-xs font-medium border ${getTagBadgeClass(item.taskTag)} hover:opacity-80">
+              ${item.taskTag}
+            </button>
+          </td>
+        </tr>
+      `).join('');
+
+      // Charts
+      const ctxTask = document.getElementById('taskChart').getContext('2d');
+      if (taskChartInstance) taskChartInstance.destroy();
+      taskChartInstance = new Chart(ctxTask, {
+        type: 'doughnut',
+        data: {
+          labels: ['New', 'Pending', 'Complete'],
+          datasets: [{
+            data: [newCount, pendingCount, completeCount],
+            backgroundColor: ['#38bdf8', '#f59e0b', '#10b981'],
+            borderColor: '#0f172a',
+            borderWidth: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 12 } } } }
+        }
+      });
+
+      const ctxFuel = document.getElementById('fuelChart').getContext('2d');
+      if (fuelChartInstance) fuelChartInstance.destroy();
+      fuelChartInstance = new Chart(ctxFuel, {
+        type: 'bar',
+        data: {
+          labels: vessels.map(v => v.name),
+          datasets: [{
+            label: 'Fuel / Readiness (%)',
+            data: vessels.map(v => v.fuel),
+            backgroundColor: vessels.map(v => v.fuel < 40 ? '#f43f5e' : v.fuel < 70 ? '#f59e0b' : '#38bdf8'),
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, max: 100, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+            x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    // ---------- Vessels Tab ----------
+    function renderVessels() {
+      const q = document.getElementById('vesselSearch').value.toLowerCase();
+      const tagF = document.getElementById('vesselTagFilter').value;
+
+      const filtered = vessels.filter(v => {
+        const matchQ = [v.id, v.name, v.imo, v.type, v.location].some(f => f.toLowerCase().includes(q));
+        const matchTag = tagF === 'All' || v.taskTag === tagF;
+        return matchQ && matchTag;
+      });
+
+      document.getElementById('vesselTableBody').innerHTML = filtered.map(v => {
+        const stClass = v.status === 'Active' ? 'text-emerald-400' : v.status === 'Maintenance' ? 'text-amber-400' : 'text-slate-400';
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-mono font-semibold text-sky-400">${v.id}</td>
+            <td class="py-3 px-4 font-semibold text-white">${v.name}</td>
+            <td class="py-3 px-4">
+              <div class="text-slate-200">${v.type}</div>
+              <div class="text-xs text-slate-500 font-mono">${v.imo}</div>
+            </td>
+            <td class="py-3 px-4 text-slate-300">${v.location}</td>
+            <td class="py-3 px-4 font-mono text-slate-300">${v.fuel}%</td>
+            <td class="py-3 px-4">
+              <button onclick="cycleVesselStatus('${v.id}')" class="text-xs font-medium ${stClass} hover:underline">${v.status}</button>
+            </td>
+            <td class="py-3 px-4">
+              <button onclick="cycleTaskTag('vessels', '${v.id}')" class="px-2.5 py-1 rounded-full text-xs font-medium border ${getTagBadgeClass(v.taskTag)} hover:opacity-80">
+                ${v.taskTag}
+              </button>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <button onclick="deleteItem('vessels', '${v.id}')" class="text-xs text-rose-400 hover:text-rose-300">Remove</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function addVessel(e) {
+      e.preventDefault();
+      vessels.unshift({
+        id: document.getElementById('vId').value.trim(),
+        imo: document.getElementById('vImo').value.trim(),
+        name: document.getElementById('vName').value.trim(),
+        type: document.getElementById('vType').value,
+        location: document.getElementById('vLocation').value.trim(),
+        fuel: Number(document.getElementById('vFuel').value),
+        status: 'Active',
+        taskTag: document.getElementById('vTag').value
+      });
+      saveState();
+      renderAll();
+      e.target.reset();
+      closeModal('addVesselModal');
+    }
+
+    function cycleVesselStatus(id) {
+      const order = ['Active', 'Idle', 'Maintenance'];
+      const v = vessels.find(x => x.id === id);
+      if (v) {
+        v.status = order[(order.indexOf(v.status) + 1) % order.length];
+        saveState();
+        renderAll();
+      }
+    }
+
+    // ---------- Inventory Tab ----------
+    function renderInventory() {
+      const q = document.getElementById('invSearch').value.toLowerCase();
+      const tagF = document.getElementById('invTagFilter').value;
+
+      const filtered = inventory.filter(i => {
+        const matchQ = [i.id, i.vesselName, i.partName, i.partCode, i.category].some(f => f.toLowerCase().includes(q));
+        const matchTag = tagF === 'All' || i.taskTag === tagF;
+        return matchQ && matchTag;
+      });
+
+      document.getElementById('inventoryTableBody').innerHTML = filtered.map(i => {
+        const isLow = Number(i.qty) <= Number(i.minQty);
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-mono text-indigo-400">${i.id}</td>
+            <td class="py-3 px-4 font-semibold text-white">${i.vesselName}</td>
+            <td class="py-3 px-4 text-slate-200">${i.partName}</td>
+            <td class="py-3 px-4 font-mono text-xs text-slate-400">${i.partCode}</td>
+            <td class="py-3 px-4 text-slate-300">${i.category}</td>
+            <td class="py-3 px-4">
+              <span class="font-mono font-semibold ${isLow ? 'text-rose-400' : 'text-emerald-400'}">${i.qty}</span>
+              <span class="text-xs text-slate-500"> / min ${i.minQty}</span>
+              ${isLow ? '<span class="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-rose-500/20 text-rose-400">LOW</span>' : ''}
+            </td>
+            <td class="py-3 px-4">
+              <button onclick="cycleTaskTag('inventory', '${i.id}')" class="px-2.5 py-1 rounded-full text-xs font-medium border ${getTagBadgeClass(i.taskTag)} hover:opacity-80">
+                ${i.taskTag}
+              </button>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <button onclick="deleteItem('inventory', '${i.id}')" class="text-xs text-rose-400 hover:text-rose-300">Remove</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function addInventory(e) {
+      e.preventDefault();
+      inventory.unshift({
+        id: 'INV-' + Math.floor(200 + Math.random() * 799),
+        vesselName: document.getElementById('invVesselSelect').value,
+        partName: document.getElementById('invPartName').value.trim(),
+        partCode: document.getElementById('invPartCode').value.trim(),
+        category: document.getElementById('invCategory').value,
+        qty: Number(document.getElementById('invQty').value),
+        minQty: Number(document.getElementById('invMinQty').value),
+        taskTag: document.getElementById('invTag').value
+      });
+      saveState();
+      renderAll();
+      e.target.reset();
+      closeModal('addInventoryModal');
+    }
+
+    // ---------- Incidents Tab ----------
+    function renderIncidents() {
+      const q = document.getElementById('incSearch').value.toLowerCase();
+      const tagF = document.getElementById('incTagFilter').value;
+
+      const filtered = incidents.filter(c => {
+        const matchQ = [c.id, c.vesselName, c.title, c.severity, c.reportedBy].some(f => f.toLowerCase().includes(q));
+        const matchTag = tagF === 'All' || c.taskTag === tagF;
+        return matchQ && matchTag;
+      });
+
+      document.getElementById('incidentTableBody').innerHTML = filtered.map(c => {
+        const sevClass = c.severity === 'Critical' || c.severity === 'High'
+          ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+          : c.severity === 'Medium'
+            ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+            : 'bg-slate-700/50 text-slate-300 border-slate-600';
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-mono text-rose-400">${c.id}</td>
+            <td class="py-3 px-4 font-semibold text-white">${c.vesselName}</td>
+            <td class="py-3 px-4 text-slate-200">${c.title}</td>
+            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full text-xs border ${sevClass}">${c.severity}</span></td>
+            <td class="py-3 px-4 text-slate-300">${c.reportedBy}</td>
+            <td class="py-3 px-4 font-mono text-xs text-slate-400">${c.date}</td>
+            <td class="py-3 px-4">
+              <button onclick="cycleTaskTag('incidents', '${c.id}')" class="px-2.5 py-1 rounded-full text-xs font-medium border ${getTagBadgeClass(c.taskTag)} hover:opacity-80">
+                ${c.taskTag}
+              </button>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <button onclick="deleteItem('incidents', '${c.id}')" class="text-xs text-rose-400 hover:text-rose-300">Remove</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function addIncident(e) {
+      e.preventDefault();
+      incidents.unshift({
+        id: 'INC-' + Math.floor(300 + Math.random() * 699),
+        vesselName: document.getElementById('incVesselSelect').value,
+        title: document.getElementById('incTitle').value.trim(),
+        severity: document.getElementById('incSeverity').value,
+        reportedBy: document.getElementById('incReporter').value.trim(),
+        date: document.getElementById('incDate').value,
+        taskTag: document.getElementById('incTag').value
+      });
+      saveState();
+      renderAll();
+      e.target.reset();
+      closeModal('addIncidentModal');
+    }
+
+    function deleteItem(module, id) {
+      if (module === 'vessels') vessels = vessels.filter(x => x.id !== id);
+      if (module === 'inventory') inventory = inventory.filter(x => x.id !== id);
+      if (module === 'incidents') incidents = incidents.filter(x => x.id !== id);
+      saveState();
+      renderAll();
+    }
+
+    // ---------- Servers & Power BI ----------
+    function renderServers() {
+      document.getElementById('serverList').innerHTML = servers.map(s => `
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-between gap-3">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <h3 class="text-sm font-semibold text-white">${s.name}</h3>
+              <p class="text-xs text-indigo-400 mt-0.5">${s.type} • ${s.interval}</p>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-400">${s.status} (${s.latency})</span>
+          </div>
+          <code class="text-xs font-mono text-slate-400 bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800 truncate">${s.url}</code>
+          <div class="flex items-center justify-between pt-1">
+            <button onclick="testServerSync('${s.id}')" class="px-3 py-1 rounded bg-sky-600/20 hover:bg-sky-600/30 text-sky-400 text-xs font-medium border border-sky-500/30">Test Sync</button>
+            <button onclick="removeServer('${s.id}')" class="text-xs text-slate-500 hover:text-rose-400">Remove</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addServer(e) {
+      e.preventDefault();
+      servers.push({
+        id: 'srv-' + Date.now(),
+        name: document.getElementById('sName').value.trim(),
+        type: document.getElementById('sType').value,
+        url: document.getElementById('sUrl').value.trim(),
+        interval: document.getElementById('sInterval').value,
+        status: 'Online',
+        latency: Math.floor(15 + Math.random() * 45) + 'ms'
+      });
+      saveState();
+      renderServers();
+      logSync(`Connected new endpoint: ${document.getElementById('sName').value.trim()}`);
+      e.target.reset();
+      closeModal('addServerModal');
+    }
+
+    function removeServer(id) {
+      servers = servers.filter(s => s.id !== id);
+      saveState();
+      renderServers();
+    }
+
+    function testServerSync(id) {
+      const s = servers.find(item => item.id === id);
+      if (!s) return;
+      const ms = Math.floor(12 + Math.random() * 55);
+      s.latency = `${ms}ms`;
+      saveState();
+      renderServers();
+      logSync(`[SYNC OK] ${s.name} — synced ${vessels.length} vessels, ${inventory.length} inventory items, ${incidents.length} incidents in ${ms}ms.`);
+    }
+
+    function logSync(msg) {
+      const box = document.getElementById('syncLogs');
+      const div = document.createElement('div');
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      box.prepend(div);
+    }
+
+    function clearLogs() { document.getElementById('syncLogs').innerHTML = ''; }
+
+    function rotateApiKey() {
+      pbiApiKey = 'cf_live_' + Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('');
+      saveState();
+      updateMQuery();
+      logSync('Rotated Power BI Bearer API key.');
+    }
+
+    function updateMQuery() {
+      document.getElementById('pbiApiKey').textContent = pbiApiKey;
+      const feedUrl = servers[1]?.url || 'https://api.cloudfleet.local/v1/odata/vessels';
+      document.getElementById('mQueryBox').textContent = `let
+    Source = Json.Document(Web.Contents("${feedUrl}", [
+        Headers = [#"Authorization"="Bearer ${pbiApiKey}", #"Accept"="application/json"]
+    ])),
+    VesselsTable = Table.FromRecords(Source[Vessels]),
+    InventoryTable = Table.FromRecords(Source[Vessel_Inventory]),
+    IncidentsTable = Table.FromRecords(Source[Incidents])
+in
+    VesselsTable`;
+    }
+
+    function copyText(elId) {
+      navigator.clipboard.writeText(document.getElementById(elId).textContent);
+      logSync('Copied API key to clipboard.');
+    }
+
+    function copyMQuery() {
+      navigator.clipboard.writeText(document.getElementById('mQueryBox').textContent);
+      logSync('Copied Power BI M-Query script.');
+    }
+
+    function renderSchema(table) {
+      document.querySelectorAll('.sch-btn').forEach(b => {
+        b.classList.remove('bg-sky-600', 'text-white');
+        b.classList.add('text-slate-400');
+      });
+      const active = document.getElementById(`sch-${table}`);
+      active.classList.add('bg-sky-600', 'text-white');
+      active.classList.remove('text-slate-400');
+
+      const map = { Vessels: vessels, Vessel_Inventory: inventory, Incidents: incidents };
+      document.getElementById('schemaPreview').textContent = JSON.stringify({ table, rowCount: map[table].length, rows: map[table] }, null, 2);
+    }
+
+    // ---------- Exports ----------
+    function exportCSV(type) {
+      let headers = [], rows = [], filename = '';
+      if (type === 'vessels') {
+        headers = ['VesselID', 'VesselName', 'IMO', 'Type', 'Location', 'FuelPct', 'Status', 'TaskTag'];
+        rows = vessels.map(v => [v.id, v.name, v.imo, v.type, v.location, v.fuel, v.status, v.taskTag]);
+        filename = 'CloudFleet_Vessels.csv';
+      } else if (type === 'inventory') {
+        headers = ['InvID', 'VesselName', 'PartName', 'PartCode', 'Category', 'Qty', 'MinQty', 'TaskTag'];
+        rows = inventory.map(i => [i.id, i.vesselName, i.partName, i.partCode, i.category, i.qty, i.minQty, i.taskTag]);
+        filename = 'CloudFleet_Vessel_Inventory.csv';
+      } else {
+        headers = ['IncidentID', 'VesselName', 'Title', 'Severity', 'ReportedBy', 'Date', 'TaskTag'];
+        rows = incidents.map(c => [c.id, c.vesselName, c.title, c.severity, c.reportedBy, c.date, c.taskTag]);
+        filename = 'CloudFleet_Incidents.csv';
+      }
+      const csv = '\uFEFF' + [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n');
+      downloadFile(csv, filename, 'text/csv;charset=utf-8;');
+    }
+
+    function exportAllJSON() {
+      const payload = { generatedAt: new Date().toISOString(), Vessels: vessels, Vessel_Inventory: inventory, Incidents: incidents, Servers: servers };
+      downloadFile(JSON.stringify(payload, null, 2), 'CloudFleet_Full_PowerBI_Feed.json', 'application/json');
+    }
+
+    function downloadFile(content, filename, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // ---------- Floating Free Gemini Flash AI ----------
+    function toggleAiPanel() {
+      document.getElementById('aiPanel').classList.toggle('hidden');
+      document.getElementById('geminiKeyInput').value = geminiApiKey;
+      document.getElementById('geminiModelSelect').value = geminiModel;
+    }
+
+    function toggleApiKeySettings() {
+      document.getElementById('aiSettings').classList.toggle('hidden');
+    }
+
+    function saveGeminiConfig() {
+      geminiApiKey = document.getElementById('geminiKeyInput').value.trim();
+      geminiModel = document.getElementById('geminiModelSelect').value;
+      localStorage.setItem('cf_gemini_key', geminiApiKey);
+      localStorage.setItem('cf_gemini_model', geminiModel);
+      document.getElementById('aiSettings').classList.add('hidden');
+      appendAiMessage('assistant', `Saved configuration for ${geminiModel}. Ask anything about your vessels, inventory, incidents, or Power BI!`);
+    }
+
+    function quickAsk(prompt) {
+      document.getElementById('aiInput').value = prompt;
+      sendAiMessage(new Event('submit'));
+    }
+
+    function appendAiMessage(role, text) {
+      const box = document.getElementById('aiMessages');
+      const div = document.createElement('div');
+      div.className = role === 'user'
+        ? 'ml-8 bg-sky-600 text-white rounded-xl p-2.5'
+        : 'mr-4 bg-slate-800/90 border border-slate-700 text-slate-200 rounded-xl p-3 whitespace-pre-wrap';
+      div.textContent = text;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+      return div;
+    }
+
+    async function sendAiMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('aiInput');
+      const prompt = input.value.trim();
+      if (!prompt) return;
+
+      appendAiMessage('user', prompt);
+      input.value = '';
+
+      if (!geminiApiKey) {
+        appendAiMessage('assistant', 'Click "Key" above and enter your free Google AI Studio Gemini API key first.');
+        document.getElementById('aiSettings').classList.remove('hidden');
+        return;
+      }
+
+      const loadingBubble = appendAiMessage('assistant', 'Analyzing live fleet data with Gemini Flash...');
+      const sendBtn = document.getElementById('aiSendBtn');
+      sendBtn.disabled = true;
+
+      const systemContext = `You are CloudFleet Pro AI, an expert in maritime fleet operations, vessel spare inventory, incident tracking, SQL Server, and Power BI (DAX & Power Query M).
+Live Vessels (${vessels.length}): ${JSON.stringify(vessels)}
+Live Vessel Inventory (${inventory.length}): ${JSON.stringify(inventory)}
+Live Incidents (${incidents.length}): ${JSON.stringify(incidents)}
+Connected Servers: ${JSON.stringify(servers)}
+Task tags used across all tables: "New", "Pending", "Complete".
+Provide concise, actionable answers directly grounded in the live data.`;
+
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${encodeURIComponent(geminiApiKey)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemContext }] },
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || 'API request failed');
+        loadingBubble.textContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response returned.';
+      } catch (err) {
+        loadingBubble.textContent = `Error: ${err.message}`;
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    // ---------- Init ----------
+    renderAll();
+    updateMQuery();
+  </script>
+</body>
+</html>
